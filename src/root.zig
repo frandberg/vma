@@ -69,15 +69,22 @@ fn check(r: c.VkResult) Error!void {
 // Handle conversion (vulkan-zig enum handle <-> C opaque pointer)
 // ===========================================================================
 
-/// vulkan-zig represents Vulkan handles as `enum(usize)`/`enum(u64)` values; the
-/// C API wants opaque pointers. Both are just the same integer, so we convert by
-/// round-tripping through it. A null handle (value 0) becomes a null pointer.
+/// vulkan-zig represents non-dispatchable handles as `enum(u64)` values and dispatchable
+/// ones (instance, device, …) as opaque pointers; the C API wants opaque pointers for both. An
+/// enum handle round-trips through its integer, a pointer handle is a cast. A null enum handle
+/// (value 0) becomes a null pointer.
 inline fn toC(comptime CHandle: type, handle: anytype) CHandle {
-    return @ptrFromInt(@intFromEnum(handle));
+    return switch (@typeInfo(@TypeOf(handle))) {
+        .pointer, .optional => @ptrCast(handle),
+        else => @ptrFromInt(@intFromEnum(handle)),
+    };
 }
 
 inline fn toVk(comptime VkHandle: type, ptr: anytype) VkHandle {
-    return @enumFromInt(@intFromPtr(ptr));
+    return switch (@typeInfo(VkHandle)) {
+        .pointer, .optional => @ptrCast(ptr),
+        else => @enumFromInt(@intFromPtr(ptr)),
+    };
 }
 
 inline fn optName(p: [*c]const u8) ?[*:0]const u8 {
